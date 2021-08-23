@@ -1,112 +1,70 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {
+  App,
+  MarkdownPostProcessor,
+  MarkdownPostProcessorContext,
+  MarkdownPreviewRenderer,
+  MarkdownRenderer,
+  Modal,
+  Notice,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+} from "obsidian";
+import vextab from "vextab/releases/vextab-div";
 
-interface MyPluginSettings {
-	mySetting: string;
-}
+const { VexTab, Artist, Flow } = vextab;
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+const Renderer = Flow.Renderer;
+Artist.NOLOGO = true;
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class MusicPlugin extends Plugin {
+  static postprocessor: MarkdownPostProcessor = (
+    el: HTMLElement,
+    ctx: MarkdownPostProcessorContext
+  ) => {
+    // Assumption: One section always contains only the code block
 
-	async onload() {
-		console.log('loading plugin');
+    const blockToReplace = el.querySelector("pre");
+    if (!blockToReplace) {
+      return;
+    }
 
-		await this.loadSettings();
+    const musicBlock = blockToReplace.querySelector(
+      "code.language-music-vextab"
+    );
+    if (!musicBlock) {
+      return;
+    }
 
-		this.addRibbonIcon('dice', 'Sample Plugin', () => {
-			new Notice('This is a notice!');
-		});
+    const source = musicBlock.textContent;
+    const destination = document.createElement("div");
+    document.body.appendChild(destination);
+    destination.style.background = "white";
 
-		this.addStatusBarItem().setText('Status Bar Text');
+    setTimeout(() => {
+      const renderer = new Renderer(destination, Renderer.Backends.SVG);
+      // Initialize VexTab artist and parser.
+      const artist = new Artist(10, 0, 860, {
+        scale: 1,
+        bottom_spacing: 50,
+        tab_stave_lower_spacing: 20,
+        note_stave_lower_spacing: 20,
+      });
+      const tab = new VexTab(artist);
+      tab.parse(source);
+      artist.render(renderer);
 
-		this.addCommand({
-			id: 'open-sample-modal',
-			name: 'Open Sample Modal',
-			// callback: () => {
-			// 	console.log('Simple Callback');
-			// },
-			checkCallback: (checking: boolean) => {
-				let leaf = this.app.workspace.activeLeaf;
-				if (leaf) {
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-					return true;
-				}
-				return false;
-			}
-		});
+      el.replaceChild(destination, blockToReplace);
+    });
+  };
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+  onload() {
+    console.log("loading vextab plugin");
+    MarkdownPreviewRenderer.registerPostProcessor(MusicPlugin.postprocessor);
+  }
 
-		this.registerCodeMirror((cm: CodeMirror.Editor) => {
-			console.log('codemirror', cm);
-		});
-
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-		console.log('unloading plugin');
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		let {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		let {containerEl} = this;
-
-		containerEl.empty();
-
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue('')
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+  onunload() {
+    console.log("unloading vextab plugin");
+    MarkdownPreviewRenderer.unregisterPostProcessor(MusicPlugin.postprocessor);
+  }
 }
